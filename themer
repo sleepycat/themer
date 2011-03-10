@@ -1,0 +1,111 @@
+#!/usr/bin/env ruby
+require 'rubygems'
+require 'themer'
+
+
+if ARGV[0] == '-h'
+  puts "usage: 'ruby themer.rb name_of_theme' Run it in the Eftplus dir."
+
+elsif ARGV[0]
+
+  #  #1. Choose Template and download zip file from css templates eg:
+  #  #   http://www.freecsstemplates.org/download/zip/asterisk/
+  #  #2. Unzip and copy folder to public/themes
+  #  #3. Create folder of same name in app/views/layouts/themes
+  #  #4. Copy index.html from public folder version to layouts/themes/folder as layout.html.erb
+  #  #5. Copy thumbnail image from css templates index site eg:
+  #  #   http://www.freecsstemplates.org/download/thumbnail/asterisk/
+  #  #   to public/themes/folder as <template name>.gif
+  #  #6. Edit app/views/layouts/themes/folder/layout.html.erb...
+  #
+  theme_name = ARGV[0]
+
+  free_css_templates = EftPlus::FreeCssTemplates.new
+
+  free_css_templates.install_theme theme_name
+
+  template = EftPlus::TemplateFile.new(File.join('app', 'views', 'layouts', 'themes', theme_name, 'layout.html.erb' ))
+  #  #
+  #
+  #  #   Change Title to organisation.full_club_name
+  template.title='<%= @organisation.full_club_name %>'
+  #  #   Replace stylesheet link tag with javascripts and stylesheets call.  In stylesheets include name of base stylesheet in public/themes/folder
+  #  #   Immediately below include IE6 warning script.
+  template.replace_tag('//link', "\r\n<%= stylesheets 'style'%>\r\n<%= javascripts %>\r\n<!--[if lte IE 6]><script src='/javascripts/ie6/warning.js'></script><script>window.onload=function(){e('/javascripts/ie6/')}</script><![endif]-->\r\n")
+  #  #   In the div id="logo" section insert header calls for organisation name and club name
+  template.logo="\r\n<h1><a href='#'><%= @organisation.name %></a></h1>\r\n<h2><%= @organisation.club_name %></h2>\r\n"
+  #  #   Modify this logo div to include the organisation logo - usually through theme css
+  #  #   In div id="menu" Replace the main links to 'home' 'blog' etc with the theme_page_links call (including the selected classname) preserving surrounding UL tags
+  menu =<<MENU
+  \r\n<ul>\r\n<%= theme_page_links("current_page_item") %>\r\n</ul>\r\n
+MENU
+  template.menu= menu
+  #  #   At the bottom of the layout (in id='legal'?) change the copyright notice to a copyright call preserving link back to css templates
+  #looks like the id="legal" only shows up in emporium. Even then its nested under footer. --Mike.
+  template.footer="\r\n<%= copyright %> Design by <a href='http://www.freecsstemplates.org/'>Free CSS Templates</a>.\r\n"
+  #  # 7. Copy contents of div class='post' into _post.html.erb in views/layouts/themes/ folder and do the following edits:
+  #  #   Change class='title' content to include call to post.title
+  
+  #  #   Change date section to include call to subsections[0] if there is a subsections[0]
+  #  #   Change meta or links class section to include other subsections if they exist (note all subsections should be included on the page somehow
+  #  #   replace class="entry" section with call to post.body
+  template.replace_content "//*[@class='post']//*[@class='entry']", "<%= post.body %>"
+
+  meta =<<EOHTML
+  <% if post.subsections.size > 0 %>\r
+    <p class="byline"><small><%= post.subsections.join(" | ") %></small></p>\r
+  <% end %>\r
+EOHTML
+  template.replace_content "//*[@class='post']//*[@class='meta']", meta
+  
+  template.replace_content "//*[@class='post']//*[@class='title']", "<%= post.title %>"
+  
+  template.extract_class_to_partial "post"
+  
+  #  #8. Create _side_bar.html.erb partial (using copies of exisitng ones without editing is probably fine)
+  template.sidebar= "<li>\r\n<h2>\r\n<%= side_bar.title %>\r\n</h2>\r\n<%= liquify side_bar %>\r\n</li>"
+  template.content_to_file "//*[@id='sidebar']", File.join('app', 'views', 'layouts', 'themes', theme_name, '_side_bar.html.erb' )
+  template.sidebar="\r\n<%= render :partial => 'side_bar' %>\r\n"
+  #  #9. Back in layout.html.erb
+  #  #   Replace entire contents of id='content' with <%= yield :layout %> call
+  template.content="\r\n<%= yield :layout %>\r\n"
+  #  #   In id#='sidebar' replace contents of top-level ul with  <%= render :partial => "layouts/themes/#{@organisation.theme}/side_bar", :collection => @organisation.side_bars %>
+  template.sidebar='<ul><%= render :partial => "layouts/themes/#{@organisation.theme}/side_bar", :collection => @organisation.side_bars %></ul>'
+  #  #   Any footer section remaining above the copyright notice can be deleted.
+  #
+  template.append_to "//body", "<%= flash[:dialog] %>"
+  #
+  #  # 10 .Create _email.text.html.erb and _email.test.plain.erb in view/layout/themes/folder (can copy existing from other theme)
+  email_text_html =<<-'EOT'
+  <%= liquify(@email) %>
+<p>This message is a <%= @organisation.full_club_name %> email.<br/>
+  Please click the following link if you would like unsubscribe or change your privacy settings:<br/>
+  <a href="http://<%= "#{@organisation.reference}.#{HOST}" %>/privacy">http://<%= "#{@organisation.reference}.#{HOST}" %>/privacy</a>
+</p>
+  EOT
+  File.open(File.join('app', 'views', 'layouts', 'themes', theme_name, "_email.text.html.erb"), "w+"){|f| f<< email_text_html}
+
+  email_text_plain =<<-'EOT'
+<% @temp = liquify(@email) %>
+<%= @temp.striphtml %>
+
+This message is a <%= @organisation.full_club_name %> email.
+Please click the following link if you would like unsubscribe or change your privacy settings:
+http://<%= "#{@organisation.reference}.#{HOST}" %>/privacy
+  EOT
+  File.open(File.join('app', 'views', 'layouts', 'themes', theme_name, "_email.text.plain.erb"), "w+"){|f| f<< email_text_plain}
+
+  #  # 11.Test by selecting as theme in preferences of dummy org and going through site pages and member pages.
+  #  #   Check particularly for:
+  #  #      the subsection parts looking OK
+  #  #      background images from vip.css working correctly
+  #  #      highlights on selected page links
+  #  # 12.Change as necessary
+  #  # 13.Upload to simplecdn (copies also need to be in git repository)
+  #
+  #
+  #
+  template.save
+  #
+
+end

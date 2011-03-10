@@ -1,0 +1,27 @@
+Themer is the interface for prepping templates from Freecsstemplates.com for use as themes in ETFPlus.
+
+To access the themer shell script from any folder use the following command:
+export PATH=$PATH:/whereever/the/script/is
+
+ie: export PATH=$PATH:/home/mike/projects/themer_test/
+
+then you can use it wherever your eftplus folder is. The environmental variable this sets up will need to be recreated next time you boot up...
+
+I've been testing this in IRB like this:
+
+mike@sleepycat:~$ cd projects/themer_test/
+mike@sleepycat:~/projects/themer_test$ irb
+irb(main):001:0> load 'lib/themer/template_file.rb'
+=> true
+irb(main):002:0> tmp = EftPlus::TemplateFile.new "ngtest.html"
+
+Then you can play around with it. The method "extract_class_to_partial" expects to place files in the folders found inside the eftplus directory but everything else works anywhere. I am using load here instead of require so I can load the file again if I make some changes to it but just re-issuing the load command and re-instantiating the class.
+
+The EftPlus::FreeCssTemplates class will really only work within the eftplus dir.
+
+To build a new version of the gem:
+gem build
+
+and then install with 
+
+sudo gem install themer-0.0.X.gem
